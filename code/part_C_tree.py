@@ -1,9 +1,10 @@
+import os
 import zipfile
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.feature import hog
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 import part_A
@@ -12,19 +13,15 @@ import part_B
 
 # --- PART C: REGULARIZATION ANALYSIS ---
 # --- DATA PATHS ---
-TRAIN_ZIP = r'C:\Users\ariel\PycharmProjects\TECHNOTZ DS TARGIL 2\Train Set (Labeled)-20260407T132757Z-3-001.zip'
+TRAIN_ZIP = r'data\Train Set (Labeled)'
+PARTC_CACHE = os.path.join('data', 'part_c_splits_inspect.npz')
 
-# 1. Load and Encode Data
-X_full, y_full_str = part_A.process_and_inspect(TRAIN_ZIP)
-le = LabelEncoder()
-y_full = le.fit_transform(y_full_str)
-num_classes = len(le.classes_)
-
-# 2. Split for Validation (Crucial for detecting Overfitting)
-X_train, X_val, y_train, y_val = train_test_split(X_full, y_full, test_size=0.25, random_state=42)
-
-# One-hot encoding for the fit method
-y_train_encoded = np.eye(num_classes)[y_train]
+if os.path.isfile(PARTC_CACHE):
+    X_train, X_val, y_train, y_val, num_classes = part_A.load_partc_train_val_npz(PARTC_CACHE)
+else:
+    X_train, X_val, y_train, y_val, num_classes = part_A.save_partc_train_val_npz(
+        TRAIN_ZIP, PARTC_CACHE, pipeline='inspect'
+    )
 
 # --- הגדרת Sweep מהיר במיוחד ---
 # 1. צמצום נתונים (רק 15% מהמידע)

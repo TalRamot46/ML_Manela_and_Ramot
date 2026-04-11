@@ -1,10 +1,10 @@
+import os
 import zipfile
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.feature import hog
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
 import part_A
 import part_B
@@ -13,12 +13,14 @@ import part_B
 # --- PART C: REGULARIZATION ANALYSIS ---
 # --- DATA PATHS ---
 TRAIN_DIR = r'data\Train Set (Labeled)'
+PARTC_CACHE = os.path.join('data', 'part_c_splits_optimized.npz')
 
-# 1. Load and Encode Data
-X_full, y_full_str = part_A.process_and_inspect(TRAIN_DIR)
-le = LabelEncoder()
-y_full = le.fit_transform(y_full_str)
-num_classes = len(le.classes_)
+if os.path.isfile(PARTC_CACHE):
+    X_train, X_val, y_train, y_val, num_classes = part_A.load_partc_train_val_npz(PARTC_CACHE)
+else:
+    X_train, X_val, y_train, y_val, num_classes = part_A.save_partc_train_val_npz(
+        TRAIN_DIR, PARTC_CACHE, pipeline='optimized'
+    )
 
 # One-hot encoding for the fit method
 y_train_encoded = np.eye(num_classes)[y_train]

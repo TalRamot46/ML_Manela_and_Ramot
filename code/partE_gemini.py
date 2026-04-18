@@ -2,8 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import mode
 
-import part_A
-
 class SimpleKMeans:
     def __init__(self, k=28, max_iters=1000):
         self.k = k
@@ -42,43 +40,43 @@ def get_pca(X, dims=2):
     top_vectors = eigenvectors[:, idx[:dims]]
     return X_centered @ top_vectors
 
-import os
-PARTC_CACHE = os.path.join('data', 'part_c_splits_optimized.npz')
-def perform_k_means():
-    # loading image data from part A
-    X_train, X_val, y_train, y_val, num_classes = part_A.load_partc_train_val_npz(PARTC_CACHE)
+# --- Execution & Evaluation ---
 
-    # gathering all the data into one array
-    X = np.concatenate([X_train, X_val])
-    y_true = np.concatenate([y_train, y_val])
+# Generate some dummy data (3 clusters)
+np.random.seed(42)
+cluster1 = np.random.normal(0, 1, (50, 5))
+cluster2 = np.random.normal(5, 1, (50, 5))
+cluster3 = np.random.normal(10, 1, (50, 5))
+X = np.vstack([cluster1, cluster2, cluster3])
+y_true = np.array([0]*50 + [1]*50 + [2]*50)
 
-    # performing k-means
-    model = SimpleKMeans(k=28, max_iters=1000)
-    y_kmeans = model.fit(X)
+# Run KMeans
+model = SimpleKMeans(k=3)
+y_kmeans = model.fit(X)
 
-    mapped_labels = np.zeros_like(y_kmeans)
-    for i in range(28):
-        mask = (y_kmeans == i)
-        if np.any(mask):
-            mapped_labels[mask] = mode(y_true[mask], keepdims=True)[0][0]
+# --- Analytical Correlation (Accuracy) ---
+# Since KMeans labels are arbitrary (Cluster 0 might be Label 2), 
+# we map them to the most frequent true label in each cluster.
+mapped_labels = np.zeros_like(y_kmeans)
+for i in range(3):
+    mask = (y_kmeans == i)
+    if np.any(mask):
+        mapped_labels[mask] = mode(y_true[mask], keepdims=True)[0][0]
 
-    accuracy = np.mean(mapped_labels == y_true)
-    print(f"Analytical Accuracy (mapped): {accuracy * 100:.2f}%")
+accuracy = np.mean(mapped_labels == y_true)
+print(f"Analytical Accuracy (mapped): {accuracy * 100:.2f}%")
 
+# --- Plotting ---
+X_2d = get_pca(X)
+plt.figure(figsize=(10, 5))
 
-    # perform another PCA to reduce X features to 2 dimensions
-    X_pca = get_pca(X, dims=2)
-    plt.figure(figsize=(10, 5))
+plt.subplot(1, 2, 1)
+plt.scatter(X_2d[:, 0], X_2d[:, 1], c=y_true, cmap='viridis', alpha=0.6)
+plt.title("True Labels (PCA Projection)")
 
-    plt.subplot(1, 2, 1)
-    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_true, cmap='viridis', alpha=0.6)
-    plt.title("True Labels (PCA Projection)")
+plt.subplot(1, 2, 2)
+plt.scatter(X_2d[:, 0], X_2d[:, 1], c=y_kmeans, cmap='plasma', alpha=0.6)
+plt.title(f"K-Means Clusters (Acc: {accuracy*100:.1f}%)")
 
-    plt.subplot(1, 2, 2)
-    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_kmeans, cmap='plasma', alpha=0.6)
-    plt.title(f"K-Means Clusters (Acc: {accuracy*100:.1f}%)")
-
-    plt.tight_layout()
-    plt.show()
-
-perform_k_means()
+plt.tight_layout()
+plt.show()

@@ -6,12 +6,13 @@ from __future__ import annotations
 import os
 from itertools import product
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
-
+from scipy import stats
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.svm import SVC
 from tqdm import tqdm
+import time
 import part_A
 import part_B
 
@@ -167,7 +168,8 @@ def nested_cross_validate(
 
         print(f"Running inner cross-validation for fold {fold_out} with {len(combos)} combinations...")
         for params in combos:
-            print(f"Running fold {fold_out} with params {params}...")
+            print(f"Running fold {fold_out} with params {params}...", end="\t")
+            start_time = time.time()
             inner_errors: List[float] = []
             for idx_in_train, idx_in_val in skf_in.split(X_ot, y_ot):
                 X_in_tr, y_in_tr = X_ot[idx_in_train], y_ot[idx_in_train]
@@ -187,6 +189,8 @@ def nested_cross_validate(
                 best_mean_inner = mean_inner
                 best_params = dict(params)
 
+            print(f"finished in {time.time() - start_time:.2f} seconds | mean inner error = {mean_inner:.4f}")
+
         assert best_params is not None
         y_hat_outer = _fit_predict(
             model_name,
@@ -200,8 +204,9 @@ def nested_cross_validate(
         outer_errors.append(_misclassification_error(y_oe, y_hat_outer))
         chosen.append(best_params)
         outer_test_indices.append(np.asarray(idx_outer_test))
+        print(f"finished in {time.time() - start_time:.2f} seconds | mean outer error = {mean_outer:.4f}")
 
-    return {
+    result = {
         "model_name": model_name,
         "outer_fold_errors": outer_errors,
         "chosen_hyperparameters": chosen,
@@ -211,6 +216,8 @@ def nested_cross_validate(
         "K_out": K_out,
         "K_in": K_in,
     }
+    print(result)
+    return result
 
 
 def compare_models_nested_cv(
@@ -246,13 +253,6 @@ def compare_models_nested_cv(
         "per_model": results,
         "ranking_by_mean_outer_error": [name for name, _ in ranking],
     }
-
-    try:
-        from scipy import stats  # type: ignore
-    except ImportError:
-        comparison["paired_tests"] = None
-        comparison["note"] = "Install scipy for paired statistical tests on outer-fold errors."
-        return comparison
 
     labels = list(results.keys())
     errors_matrix = np.array([results[l]["outer_fold_errors"] for l in labels])
@@ -311,6 +311,7 @@ def print_model_comparison_report(comp: Mapping[str, Any]) -> None:
     else:
         print("\n", comp.get("note", ""))
 
+
 PARTD_FULL_COMPARE = 1
 
 if __name__ == "__main__":
@@ -320,17 +321,17 @@ if __name__ == "__main__":
     # heavier three-model comparison (can take a long time on the full feature matrix).
     if PARTD_FULL_COMPARE == 1:
         svm_grid = {
-            "C": [0.1, 1.0, 10.0],
+            "C": [1.0, 10.0, 20.0],
             "gamma": ["scale", 0.01, 0.1],
         }
         linear_grid = {
             "lr": [0.05],
-            "epochs": [100],
-            "reg": [0.0001, 0.01, 0.5],
+            "epochs": [10, 50, 100, 200],
+            "reg": [0.0001, 0.01, 0.5, 1],
         }
         tree_grid = {
-            "max_depth": [2, 4, 8],
-            "min_samples_split": [2, 20],
+            "max_depth": [2, 4],
+            "min_samples_split": [2, 4],
         }
         specs = {
             "SVM": ("SVM", svm_grid),

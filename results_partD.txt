@@ -1,0 +1,21 @@
+model_name: SVM
+outer_fold_errors: [0.04092471102780382, 0.034989065916900985, 0.037800687285223344, 0.042486722899094054, 0.03500000000000003]
+chosen_hyperparameters: [{'C': 100.0, 'gamma': 'scale'}, {'C': 100.0, 'gamma': 'scale'}, {'C': 100.0, 'gamma': 'scale'}, {'C': 100.0, 'gamma': 'scale'}, {'C': 100.0, 'gamma': 'scale'}]
+outer_fold_test_indices: [array([    6,    10,    11, ..., 15994, 16001, 16003], shape=(3201,)), array([    3,     4,     8, ..., 15988, 15993, 15997], shape=(3201,)), array([    1,     7,    12, ..., 15989, 15992, 16002], shape=(3201,)), array([    5,    14,    16, ..., 15995, 15996, 15999], shape=(3201,)), array([    0,     2,     9, ..., 15990, 15998, 16000], shape=(3200,))]
+mean_outer_error: 0.038240237425804444
+std_outer_error: 0.003409600287301476
+
+model_name: linear_reg
+outer_fold_errors: [0.29584504842236803, 0.29771946266791627, 0.28834739144017496, 0.28334895345204625, 0.27249999999999996]
+chosen_hyperparameters: [{'lr': 0.05, 'epochs': 200, 'reg': 0.01}, {'lr': 0.05, 'epochs': 200, 'reg': 0.01}, {'lr': 0.05, 'epochs': 200, 'reg': 0.01}, {'lr': 0.05, 'epochs': 200, 'reg': 0.01}, {'lr': 0.05, 'epochs': 200, 'reg': 0.01}]
+outer_fold_test_indices: [array([    6,    10,    11, ..., 15994, 16001, 16003], shape=(3201,)), array([    3,     4,     8, ..., 15988, 15993, 15997], shape=(3201,)), array([    1,     7,    12, ..., 15989, 15992, 16002], shape=(3201,)), array([    5,    14,    16, ..., 15995, 15996, 15999], shape=(3201,)), array([    0,     2,     9, ..., 15990, 15998, 16000], shape=(3200,))]
+mean_outer_error: 0.2875521711965011
+std_outer_error: 0.010210446867302641
+
+model_name: tree
+outer_fold_errors: [0.8569197125898157, 0.8616057482036863, 0.8412995938769134, 0.8506716651046549, 0.85]
+chosen_hyperparameters: [{'max_depth': 4, 'min_samples_split': 2}, {'max_depth': 4, 'min_samples_split': 2}, {'max_depth': 4, 'min_samples_split': 2}, {'max_depth': 4, 'min_samples_split': 2}, {'max_depth': 4, 'min_samples_split': 2}]
+outer_fold_test_indices: [array([    6,    10,    11, ..., 15994, 16001, 16003], shape=(3201,)), array([    3,     4,     8, ..., 15988, 15993, 15997], shape=(3201,)), array([    1,     7,    12, ..., 15989, 15992, 16002], shape=(3201,)), array([    5,    14,    16, ..., 15995, 15996, 15999], shape=(3201,)), array([    0,     2,     9, ..., 15990, 15998, 16000], shape=(3200,))]
+mean_outer_error: 0.8520993439550141
+std_outer_error: 0.007692330420704839
+

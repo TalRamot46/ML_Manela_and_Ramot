@@ -75,7 +75,7 @@ def perform_k_means():
     plt.title("True Labels (PCA Projection)")
 
     plt.subplot(1, 2, 2)
-    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_kmeans, cmap='plasma', alpha=0.6)
+    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_kmeans, cmap='viridis', alpha=0.6)
     plt.title(f"K-Means Clusters (Acc: {accuracy*100:.1f}%)")
 
     plt.tight_layout()

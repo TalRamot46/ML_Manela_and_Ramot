@@ -28,8 +28,7 @@ PARTC_CACHE = os.path.join(_REPO_ROOT, "data", "part_c_splits_optimized.npz")
 
 def load_full_partc_features(
     npz_path: str = PARTC_CACHE,
-    train_dir: str = TRAIN_DIR,
-) -> Tuple[np.ndarray, np.ndarray, int]:
+    train_dir: str = TRAIN_DIR,) -> Tuple[np.ndarray, np.ndarray, int]:
     """
     Load Part C features and return the full matrix X, labels y, and num_classes
     (concatenation of the saved train and validation splits).
@@ -44,9 +43,8 @@ def load_full_partc_features(
     y = np.concatenate([y_tr, y_va])
     return X, y, num_classes
 
-
 def _param_grid_product(param_grid: Mapping[str, Iterable[Any]]) -> List[Dict[str, Any]]:
-    # input - output example:
+    # input - output example of this helper mapping function that the AI gave us:
     # {'C': [1.0, 10.0], 'gamma': ['scale', 0.1]} -> 
     # [{'C': 1.0, 'gamma': 'scale'}, {'C': 1.0, 'gamma': 0.1}, {'C': 10.0, 'gamma': 'scale'}, {'C': 10.0, 'gamma': 0.1}]
 
@@ -55,6 +53,7 @@ def _param_grid_product(param_grid: Mapping[str, Iterable[Any]]) -> List[Dict[st
 
 
 def _misclassification_error(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    # a simple formula for calculating the error of a model with the labels.
     return float(1.0 - accuracy_score(y_true, y_pred))
 
 
@@ -140,40 +139,45 @@ def nested_cross_validate(
     if K_out < 2 or K_in < 2:
         raise ValueError("K_out and K_in must be at least 2.")
 
-    skf_out = StratifiedKFold(n_splits=K_out, shuffle=True, random_state=random_state)
     combos = _param_grid_product(param_grid)
     if not combos:
         raise ValueError("param_grid must contain at least one hyperparameter with values.")
 
     outer_errors: List[float] = []
-    chosen: List[Dict[str, Any]] = []
+    chosen_hyperparameters: List[Dict[str, Any]] = []
     outer_test_indices: List[np.ndarray] = []
 
     print(f"\nRunning nested cross-validation for {model_name} with {len(combos)} combinations...")
-    # use tqdm to print the progress
+
+    # loop 2 in our word document
+    # The following loop enables to run over all partitions of the data into K_out outerfolds,
+    # using the sklearn.model_selection class which splits the data in a clever way (uniform label distribution, invariance for data labeling etc.)
+    skf_out = StratifiedKFold(n_splits=K_out, shuffle=True, random_state=random_state)
     for fold_out, (idx_outer_train, idx_outer_test) in tqdm(
         enumerate(skf_out.split(X, y)), total=K_out
     ):
         X_ot, y_ot = X[idx_outer_train], y[idx_outer_train]
         X_oe, y_oe = X[idx_outer_test], y[idx_outer_test]
 
-        skf_in = StratifiedKFold(
-            n_splits=K_in,
-            shuffle=True,
-            random_state=random_state + 1000 * (fold_out + 1),
-        )
-
         best_mean_inner = np.inf
         best_params: Optional[Dict[str, Any]] = None
 
-        print(f"Running inner cross-validation for fold {fold_out} with {len(combos)} combinations...")
-        for params in combos:
-            print(f"Running fold {fold_out} with params {params}...", end="\t")
+        print(f"Running inner cross-validation for outer fold {fold_out+1}\{K_out} with {len(combos)} models M_i...")
+        
+        # Another use of StratifiedKFold for automatic and clever partition of the train fold (X_ot, y_ot) to K_in inner folds.
+        skf_in = StratifiedKFold(n_splits=K_in, shuffle=True, random_state=random_state + 1000 * (fold_out + 1))
+
+        # Iterating over "combos" - the models M_i (each with a different combo of hyperparameters) 
+        for counter, params in enumerate(combos):
+            print(f"Running M_{counter+1} with params {params}...", end="\t")
             start_time = time.time()
             inner_errors: List[float] = []
+
             for idx_in_train, idx_in_val in skf_in.split(X_ot, y_ot):
                 X_in_tr, y_in_tr = X_ot[idx_in_train], y_ot[idx_in_train]
                 X_in_va, y_in_va = X_ot[idx_in_val], y_ot[idx_in_val]
+
+                # Training M_i over the inner training fold.
                 y_pred = _fit_predict(
                     model_name,
                     params,
@@ -183,15 +187,25 @@ def nested_cross_validate(
                     num_classes,
                     tree_random_seed=random_state + fold_out * 7919 + len(inner_errors),
                 )
+                
+                # getting \varepsilon_{ij} for hypothesis h_{ij} trained over the inner 
+                # training fold (Ramot wrote it).
                 inner_errors.append(_misclassification_error(y_in_va, y_pred))
+
+            # Estimating generalization error - this is exactly 2(c)(ii) in our word document.
             mean_inner = float(np.mean(inner_errors))
+
+            # looking for the model with the best generalization error for the current outer training fold, used later for the model selection in 2(d) in our word document.
             if mean_inner < best_mean_inner:
                 best_mean_inner = mean_inner
                 best_params = dict(params)
 
             print(f"finished in {time.time() - start_time:.2f} seconds | mean inner error = {mean_inner:.4f}")
 
+        # Raising error of best_params was None (no best model was found for the current outer training fold).
         assert best_params is not None
+
+        # 2(e) in the word document - fitting the best hypothesis H_i := M_i over all outer training fold (2e).
         y_hat_outer = _fit_predict(
             model_name,
             best_params,
@@ -201,20 +215,22 @@ def nested_cross_validate(
             num_classes,
             tree_random_seed=random_state + fold_out * 4999,
         )
+    
+        # 2(f) Testing H_i over the outer test fold and receive the outer error.
         outer_errors.append(_misclassification_error(y_oe, y_hat_outer))
-        chosen.append(best_params)
+        mean_outer_error = float(np.mean(outer_errors))
+        std_outer_error = float(np.std(outer_errors, ddof=1)) if K_out > 1 else 0.0
+        chosen_hyperparameters.append(best_params)
         outer_test_indices.append(np.asarray(idx_outer_test))
-        print(f"finished in {time.time() - start_time:.2f} seconds | mean outer error = {mean_outer:.4f}")
+        print(f"finished in {time.time() - start_time:.2f} seconds | mean outer error = {mean_outer_error:.4f}")
 
     result = {
         "model_name": model_name,
         "outer_fold_errors": outer_errors,
-        "chosen_hyperparameters": chosen,
+        "chosen_hyperparameters": chosen_hyperparameters,
         "outer_fold_test_indices": outer_test_indices,
-        "mean_outer_error": float(np.mean(outer_errors)),
-        "std_outer_error": float(np.std(outer_errors, ddof=1)) if K_out > 1 else 0.0,
-        "K_out": K_out,
-        "K_in": K_in,
+        "mean_outer_error": mean_outer_error,
+        "std_outer_error": std_outer_error,
     }
     print(result)
     return result
@@ -243,6 +259,11 @@ def compare_models_nested_cv(
         results[label] = nested_cross_validate(
             mname, grid, X, y, K_out, K_in, num_classes, random_state=random_state
         )
+        # append results to a txt file
+        with open(f"results_partD.txt", "a") as f:
+            for key, value in results[label].items():
+                f.write(f"{key}: {value}\n")
+            f.write("\n")
 
     ranking = sorted(
         results.items(),
@@ -258,24 +279,7 @@ def compare_models_nested_cv(
     errors_matrix = np.array([results[l]["outer_fold_errors"] for l in labels])
     best_idx = int(np.argmin([results[l]["mean_outer_error"] for l in labels]))
     best_label = labels[best_idx]
-    tests: Dict[str, Any] = {"reference_model": best_label, "paired_vs_reference": {}}
 
-    for j, lab in enumerate(labels):
-        if j == best_idx:
-            continue
-        a = errors_matrix[best_idx]
-        b = errors_matrix[j]
-        # Wilcoxon: paired nonparametric; t-test: paired parametric
-        wilc = stats.wilcoxon(a, b, alternative="two-sided", zero_method="wilcox")
-        tt = stats.ttest_rel(a, b)
-        tests["paired_vs_reference"][lab] = {
-            "wilcoxon_statistic": float(wilc.statistic),
-            "wilcoxon_pvalue": float(wilc.pvalue),
-            "ttest_statistic": float(tt.statistic),
-            "ttest_pvalue": float(tt.pvalue),
-        }
-
-    comparison["paired_tests"] = tests
     comparison["overall_recommendation"] = (
         f"Lowest mean nested-CV error: {best_label} "
         f"(mean={results[best_label]['mean_outer_error']:.4f}, "
@@ -299,17 +303,6 @@ def print_model_comparison_report(comp: Mapping[str, Any]) -> None:
     for rank, name in enumerate(comp["ranking_by_mean_outer_error"], 1):
         r = comp["per_model"][name]
         print(f"  {rank}. {name}: {r['mean_outer_error']:.4f} +/- {r['std_outer_error']:.4f}")
-    pt = comp.get("paired_tests")
-    if pt:
-        print(f"\n=== Paired tests vs reference: {pt['reference_model']} ===")
-        for lab, vals in pt["paired_vs_reference"].items():
-            print(
-                f"  {lab}: Wilcoxon p={vals['wilcoxon_pvalue']:.4g}, "
-                f"paired t p={vals['ttest_pvalue']:.4g}"
-            )
-        print("\n", comp.get("overall_recommendation", ""))
-    else:
-        print("\n", comp.get("note", ""))
 
 
 PARTD_FULL_COMPARE = 1
@@ -317,45 +310,36 @@ PARTD_FULL_COMPARE = 1
 if __name__ == "__main__":
     X_full, y_full, n_cls = load_full_partc_features()
 
-    # Default: short smoke test. Set environment variable PARTD_FULL_COMPARE=1 for a
-    # heavier three-model comparison (can take a long time on the full feature matrix).
-    if PARTD_FULL_COMPARE == 1:
-        svm_grid = {
-            "C": [1.0, 10.0, 20.0],
-            "gamma": ["scale", 0.01, 0.1],
-        }
-        linear_grid = {
-            "lr": [0.05],
-            "epochs": [10, 50, 100, 200],
-            "reg": [0.0001, 0.01, 0.5, 1],
-        }
-        tree_grid = {
-            "max_depth": [2, 4],
-            "min_samples_split": [2, 4],
-        }
-        specs = {
-            "SVM": ("SVM", svm_grid),
-            "linear_reg": ("linear_reg", linear_grid),
-            "tree": ("tree", tree_grid),
-        }
-        K_OUT, K_IN = 5, 3
-        report = compare_models_nested_cv(
-            specs, X_full, y_full, K_out=K_OUT, K_in=K_IN, num_classes=n_cls, random_state=42
-        )
-        print_model_comparison_report(report)
-    else:
-        linear_grid = {"lr": [0.05], "epochs": [50], "reg": [0.01, 0.1]}
-        ncv = nested_cross_validate(
-            "linear_reg",
-            linear_grid,
-            X_full,
-            y_full,
-            K_out=3,
-            K_in=2,
-            num_classes=n_cls,
-            random_state=42,
-        )
-        print_nested_cv_summary(ncv)
-        print(
-            "\n(Tip: set PARTD_FULL_COMPARE=1 to run SVM + linear_reg + tree comparison.)"
-        )
+    # calculate the value of gamma='scale' for the SVM model
+    svm_model = SVC(kernel='rbf', C=1.0, gamma='scale')
+    svm_model.fit(X_full, y_full)
+    print(f"Gamma value for gamma='scale': {svm_model.gamma}")
+
+    n_cls = 50
+    print(X_full.shape)
+    gamma_theoretical = 1 / (n_cls * np.var(X_full))
+    print(f"Theoretical gamma value: {gamma_theoretical}")
+
+    svm_grid = {
+        "C": [1.0, 10.0, 100.0, 1000.0, 10000.0],
+        "gamma": [1e-4, 1e-2, 1, 100],
+    }
+    linear_grid = {
+        "lr": [1e-4, 0.001, 0.01, 0.05],
+        "epochs": [100, 200, 500],
+        "reg": [0.01, 0.5, 1, 10],
+    }
+    tree_grid = {
+        "max_depth": [2, 4],
+        "min_samples_split": [2, 4],
+    }
+    specs = {
+        "SVM": ("SVM", svm_grid),
+        "linear_reg": ("linear_reg", linear_grid),
+        "tree": ("tree", tree_grid),
+    }
+    K_OUT, K_IN = 5, 3
+    report = compare_models_nested_cv(
+        specs, X_full, y_full, K_out=K_OUT, K_in=K_IN, num_classes=n_cls, random_state=42
+    )
+    print_model_comparison_report(report)

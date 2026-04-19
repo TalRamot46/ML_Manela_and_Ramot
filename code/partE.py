@@ -58,24 +58,36 @@ def perform_k_means():
 
     mapped_labels = np.zeros_like(y_kmeans)
     for i in range(28):
+        # setting mask to be the index of the K-means group
         mask = (y_kmeans == i)
         if np.any(mask):
+            # setting the K-means group to the most common (true) label in the group
             mapped_labels[mask] = mode(y_true[mask], keepdims=True)[0][0]
 
+    # Checking the percentage of true labels found by the K-means model
     accuracy = np.mean(mapped_labels == y_true)
     print(f"Analytical Accuracy (mapped): {accuracy * 100:.2f}%")
 
+    # randomly choose a label for each K-means group
+    # for i in range(28):
+    #     mask = (y_kmeans == i)
+    #     if np.any(mask):
+    #         mapped_labels[mask] = np.random.choice(y_true[mask])
+
+    # # Checking the percentage of true labels found by the K-means model
+    # accuracy = np.mean(mapped_labels == y_true)
+    # print(f"Random Accuracy (mapped): {accuracy * 100:.2f}%")
 
     # perform another PCA to reduce X features to 2 dimensions
     X_pca = get_pca(X, dims=2)
     plt.figure(figsize=(10, 5))
 
     plt.subplot(1, 2, 1)
-    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_true, cmap='viridis', alpha=0.6)
+    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_true, cmap='rainbow', alpha=0.6)
     plt.title("True Labels (PCA Projection)")
 
     plt.subplot(1, 2, 2)
-    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_kmeans, cmap='viridis', alpha=0.6)
+    plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y_kmeans, cmap='rainbow', alpha=0.6)
     plt.title(f"K-Means Clusters (Acc: {accuracy*100:.1f}%)")
 
     plt.tight_layout()

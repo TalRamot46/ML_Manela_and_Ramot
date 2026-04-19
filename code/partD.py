@@ -6,7 +6,6 @@ from __future__ import annotations
 import os
 from itertools import product
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
-from scipy import stats
 import numpy as np
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
@@ -68,11 +67,10 @@ def _fit_predict(
 ) -> np.ndarray:
     name = model_name.strip().lower()
     if name == "svm":
-        # Default RBF kernel; only C and gamma are swept from the grid.
-        kwargs = {"kernel": "rbf", **dict(params)}
-        clf = SVC(**kwargs)
-        clf.fit(X_train, y_train)
-        return clf.predict(X_test)
+        model = SVC(kernel="rbf", **dict(params))
+        model.fit(X_train, y_train)
+        return model.predict(X_test)
+
     if name in ("linear_reg", "softmax_l1", "logreg_l1"):
         lr = params.get("lr", 0.05)
         epochs = int(params.get("epochs", 100))
@@ -81,6 +79,7 @@ def _fit_predict(
         y_enc = np.eye(num_classes)[y_train]
         model.fit(X_train, y_enc, num_classes)
         return model.predict(X_test)
+
     if name in ("tree", "decision_tree"):
         if tree_random_seed is not None:
             np.random.seed(tree_random_seed)
@@ -89,6 +88,7 @@ def _fit_predict(
         model = part_B.MyDecisionTree(max_depth=max_depth, min_samples_split=min_samples_split)
         model.fit(X_train, y_train)
         return model.predict(X_test)
+
     raise ValueError(
         f"Unknown model_name {model_name!r}. Use 'SVM', 'linear_reg', or 'tree'."
     )
@@ -162,7 +162,7 @@ def nested_cross_validate(
         best_mean_inner = np.inf
         best_params: Optional[Dict[str, Any]] = None
 
-        print(f"Running inner cross-validation for outer fold {fold_out+1}\{K_out} with {len(combos)} models M_i...")
+        print(f"Running inner cross-validation for outer fold {fold_out+1}/{K_out} with {len(combos)} models M_i...")
         
         # Another use of StratifiedKFold for automatic and clever partition of the train fold (X_ot, y_ot) to K_in inner folds.
         skf_in = StratifiedKFold(n_splits=K_in, shuffle=True, random_state=random_state + 1000 * (fold_out + 1))
@@ -226,6 +226,8 @@ def nested_cross_validate(
 
     result = {
         "model_name": model_name,
+        "K_out": K_out,
+        "K_in": K_in,
         "outer_fold_errors": outer_errors,
         "chosen_hyperparameters": chosen_hyperparameters,
         "outer_fold_test_indices": outer_test_indices,
@@ -305,8 +307,6 @@ def print_model_comparison_report(comp: Mapping[str, Any]) -> None:
         print(f"  {rank}. {name}: {r['mean_outer_error']:.4f} +/- {r['std_outer_error']:.4f}")
 
 
-PARTD_FULL_COMPARE = 1
-
 if __name__ == "__main__":
     X_full, y_full, n_cls = load_full_partc_features()
 
@@ -333,13 +333,19 @@ if __name__ == "__main__":
         "max_depth": [2, 4],
         "min_samples_split": [2, 4],
     }
-    specs = {
-        "SVM": ("SVM", svm_grid),
-        "linear_reg": ("linear_reg", linear_grid),
-        "tree": ("tree", tree_grid),
-    }
+    specs = {"SVM": ("SVM", svm_grid), "linear_reg": ("linear_reg", linear_grid), "tree": ("tree", tree_grid)}
     K_OUT, K_IN = 5, 3
-    report = compare_models_nested_cv(
-        specs, X_full, y_full, K_out=K_OUT, K_in=K_IN, num_classes=n_cls, random_state=42
+    selected_label = "SVM"  # Change to: "SVM", "linear_reg", or "tree"
+    selected_model_name, selected_grid = specs[selected_label]
+
+    result = nested_cross_validate(
+        model_name=selected_model_name,
+        param_grid=selected_grid,
+        X=X_full,
+        y=y_full,
+        K_out=K_OUT,
+        K_in=K_IN,
+        num_classes=n_cls,
+        random_state=42,
     )
-    print_model_comparison_report(report)
+    print_nested_cv_summary(result)

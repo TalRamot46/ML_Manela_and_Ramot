@@ -298,14 +298,6 @@ def print_nested_cv_summary(ncv: Mapping[str, Any]) -> None:
         print(f"  Outer fold {i}: error={err:.4f} | best params={params}")
 
 
-def print_model_comparison_report(comp: Mapping[str, Any]) -> None:
-    for label, ncv in comp["per_model"].items():
-        print_nested_cv_summary({**ncv, "model_name": label})
-    print("\n=== Ranking (mean outer error, low is better) ===")
-    for rank, name in enumerate(comp["ranking_by_mean_outer_error"], 1):
-        r = comp["per_model"][name]
-        print(f"  {rank}. {name}: {r['mean_outer_error']:.4f} +/- {r['std_outer_error']:.4f}")
-
 
 if __name__ == "__main__":
     X_full, y_full, n_cls = load_full_partc_features()
@@ -322,7 +314,7 @@ if __name__ == "__main__":
 
     svm_grid = {
         "C": [1.0, 10.0, 100.0, 1000.0, 10000.0],
-        "gamma": [1e-4, 1e-2, 1, 100],
+        "gamma": [1e-4, 1e-2, 1, 100, 'scale'],
     }
     linear_grid = {
         "lr": [1e-4, 0.001, 0.01, 0.05],

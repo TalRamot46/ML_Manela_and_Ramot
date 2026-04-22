@@ -15,6 +15,8 @@ def _iter_pgm_files(data_path):
     else:
         with zipfile.ZipFile(data_path, 'r') as archive:
             for filename in sorted(name for name in archive.namelist() if name.lower().endswith('.pgm')):
+                # AI implemented the data reading using yield. We've read about it and it seems like it is an efficient way to read a large
+                # amount of data without reading it all into the RAM at once.
                 yield filename, None, archive.read(filename)
 
 
@@ -74,7 +76,11 @@ def process_and_inspect(zip_path):
 from sklearn.decomposition import PCA
 
 
-def process_optimized(train_dir, n_components=50):
+def extract_optimized_hog_features(train_dir):
+    """
+    HOG feature matrix for the optimized pipeline (resize 64x64, CLAHE), before scaling/PCA.
+    Same ordering and parameters as process_optimized.
+    """
     features_list = []
     labels = []
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
@@ -91,30 +97,30 @@ def process_optimized(train_dir, n_components=50):
         if img is None:
             continue
 
-        # --- שינוי גודל (מאיץ את הכל משמעותית!) ---
         img_small = cv2.resize(img, (64, 64))
         img_clahe = clahe.apply(img_small)
 
-        # --- HOG ---
         fd = hog(img_clahe, orientations=9, pixels_per_cell=(8, 8),
                  cells_per_block=(2, 2), visualize=False)
         features_list.append(fd)
         labels.append(os.path.splitext(os.path.basename(filename))[0].split('_')[0])
 
-    X = np.array(features_list)
+    return np.array(features_list), np.array(labels)
 
-    # --- Z-SCORE ---
+
+def process_optimized(train_dir, n_components=50):
+    X, labels = extract_optimized_hog_features(train_dir)
+
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # נשמור רק את 50 הרכיבים הכי חשובים
     pca = PCA(n_components=min(n_components, X_scaled.shape[0], X_scaled.shape[1]))
     X_pca = pca.fit_transform(X_scaled)
 
     print(f"Original HOG shape: {X_scaled.shape}")
     print(f"PCA reduced shape: {X_pca.shape}")
 
-    return X_pca, np.array(labels)
+    return X_pca, labels
 
 
 def _partc_build_splits(
